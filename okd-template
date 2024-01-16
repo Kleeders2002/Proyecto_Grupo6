@@ -83,7 +83,7 @@ objects:
         spec:
           containers:
             - name: postgresql
-              image: 'postgres:latest'
+              image: postgres:latest
               env:
                 - name: POSTGRES_USER
                   valueFrom:
@@ -129,7 +129,7 @@ objects:
         spec:
           containers:
             - name: appserver
-              image: 'drupal:latest'
+              image: drupal:latest
               env:
                 - name: POSTGRES_HOST
                   value: ${APP_NAME}-pgsql
