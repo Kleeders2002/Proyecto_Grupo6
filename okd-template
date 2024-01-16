@@ -102,6 +102,11 @@ objects:
                       key: POSTGRES_DB
               ports:
                 - containerPort: 5432
+              resources:
+                limits:
+                  memory: "256M"
+                requests:
+                  memory: "256M"
               volumeMounts:
                 - mountPath: /var/lib/postgresql/data
                   name: postgresql-data
