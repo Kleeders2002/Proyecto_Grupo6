@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  drupal:
+    image: drupal:latest
+    ports:
+      - 8080:80
+    volumes:
+      - drupal_modules:/var/www/html/modules
+      - drupal_profiles:/var/www/html/profiles
+      - drupal_themes:/var/www/html/themes
+      - drupal_sites:/var/www/html/sites
+    networks:
+      - cnp2_net
+    depends_on:
+      - some-postgres3
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=drupal
+      - POSTGRES_PASSWORD=drupal
+      - POSTGRES_DB=drupal
+    links:
+      - some-postgres3
+    restart: always
+
+  some-postgres3:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=drupal
+      - POSTGRES_PASSWORD=drupal
+      - POSTGRES_DB=drupal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - cnp2_net
+
+volumes:
+ drupal_modules: 
+ drupal_profiles:
+ drupal_sites:
+ drupal_themes:
+ postgres-data:
+
+networks:
+ cnp2_net:
