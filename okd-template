@@ -1,67 +1,45 @@
 kind: Template
 apiVersion: v1
 metadata:
-  name: proyecto_grupo6-template
+  name: drupal-template
   annotations:
-    description: >-
-      Platilla de despliegue para cn-p2-simple-ws
-    tags: "flask,python"
+    description: "Plantilla de despliegue para Drupal y PostgreSQL en OKD"
+    tags: "drupal,postgresql"
     openshift.io/documentation-url: "https://github.com/Kleeders2002/Proyecto_Grupo6"
-    openshift.io/suport-url: "https://github.com/Kleeders2002/ProyectoGrupo6"
+    openshift.io/support-url: "https://github.com/Kleeders2002/Proyecto_Grupo6"
 
 parameters:
   - name: APP_NAME
-    description: Nombre de applicación (Prefijo de todos los objetos).
-    required: true
-  
-  - name: DB_NAME
-    description: Nombre de la base de datos.
-    value: postgres
-
-  - name: DB_USR
-    description: Nombre de usario para conexión a la base de datos.
-    value: postgres
-
-  - name: DB_PWD
-    description: Password de usuario para conexión a la base de datos.
+    description: "Nombre de la aplicación (Prefijo de todos los objetos)."
     required: true
 
   - name: DOMAIN_NAME
-    description: Nombre de dominio para la publicación de la ruta.
+    description: "Nombre de dominio para la publicación de la ruta."
     required: true
 
-  - name: PROJECT_NAME
-    description: Nombre de projecto
+  - name: POSTGRES_USER
+    description: "Nombre de usuario para conexión a la base de datos."
+    value: "drupal"
+
+  - name: POSTGRES_PASSWORD
+    description: "Contraseña de usuario para conexión a la base de datos."
     required: true
 
-labels:
-  app: "${APP_NAME}"
+  - name: POSTGRES_DB
+    description: "Nombre de la base de datos."
+    value: "drupal"
 
 objects:
-
   - kind: Secret
     apiVersion: v1
     metadata:
       name: "${APP_NAME}-keys"
     type: Opaque
     stringData:
-      db_pwd: '${DB_PWD}'
-      db_usr: '${DB_USR}'
-      db_name: '${DB_NAME}'
-      DB_URL: postgresql://${DB_USR}:${DB_PWD}@${APP_NAME}-pgsql.${PROJECT_NAME}:5432/${DB_NAME}
-     
-  - kind: Service
-    apiVersion: v1
-    metadata:
-      name: "${APP_NAME}-appserver"
-    spec:
-      ports:
-        - name: appserver
-          port: 8000
-          targetPort: 8000
-      selector:
-        name: "${APP_NAME}-appserver"
-    
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_DB: '${POSTGRES_DB}'
+
   - apiVersion: route.openshift.io/v1
     kind: Route
     metadata:
@@ -71,29 +49,24 @@ objects:
     spec:
       host: ${DOMAIN_NAME}
       port:
-        targetPort: appserver
-      tls:
-        insecureEdgeTerminationPolicy: Redirect
-        termination: edge
+        targetPort: http
       to:
         kind: Service
         name: ${APP_NAME}-appserver
-        weight: 100
       wildcardPolicy: None
-  
+
   - apiVersion: v1
     kind: Service
     metadata:
       name: '${APP_NAME}-pgsql'
     spec:
-      type: ClusterIP
       ports:
         - name: postgresql
           port: 5432
           protocol: TCP
           targetPort: 5432
       selector:
-        name: '${APP_NAME}-pgsql'
+        app: '${APP_NAME}-pgsql'
 
   - apiVersion: apps.openshift.io/v1
     kind: DeploymentConfig
@@ -102,87 +75,40 @@ objects:
     spec:
       replicas: 1
       selector:
-        name: ${APP_NAME}-pgsql
-      strategy:
-        type: Recreate
+        app: '${APP_NAME}-pgsql'
       template:
         metadata:
           labels:
-            name: "${APP_NAME}-pgsql"
+            app: '${APP_NAME}-pgsql'
         spec:
           containers:
-            - env:
-              - name: POSTGRESQL_USER
-                valueFrom:
-                  secretKeyRef:
-                    name: "${APP_NAME}-keys"
-                    key: db_usr
-              - name: POSTGRESQL_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: "${APP_NAME}-keys"
-                    key: db_pwd
-              - name: POSTGRESQL_DATABASE
-                valueFrom:
-                  secretKeyRef:
-                    name: "${APP_NAME}-keys"
-                    key: db_name
-              image: ' '
-              imagePullPolicy: Always
-              livenessProbe:
-                exec:
-                  command:
-                    - /usr/libexec/check-container
-                    - '--live'
-                failureThreshold: 3
-                initialDelaySeconds: 120
-                periodSeconds: 10
-                successThreshold: 1
-                timeoutSeconds: 10
-              name: postgresql
+            - name: postgresql
+              image: 'postgres:latest'
+              env:
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${APP_NAME}-keys"
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${APP_NAME}-keys"
+                      key: POSTGRES_PASSWORD
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${APP_NAME}-keys"
+                      key: POSTGRES_DB
               ports:
                 - containerPort: 5432
-                  protocol: TCP
-              readinessProbe:
-                exec:
-                  command:
-                    - /usr/libexec/check-container
-                failureThreshold: 3
-                initialDelaySeconds: 5
-                periodSeconds: 10
-                successThreshold: 1
-                timeoutSeconds: 1
-              resources:
-                limits:
-                  memory: "1G"
-                requests:
-                  memory: "1G"
               volumeMounts:
-                - mountPath: /var/lib/pgsql/data
+                - mountPath: /var/lib/postgresql/data
                   name: postgresql-data
-                  subPath: pgsql-data
-          restartPolicy: Always
-          securityContext:
-            supplementalGroups:
-              - 5688
           volumes:
             - name: postgresql-data
-              persistentVolumeClaim:
-                claimName: "data"
-      test: false
-      triggers:
-        - imageChangeParams:
-            automatic: true
-            containerNames:
-              - postgresql
-            from:
-              kind: ImageStreamTag
-              name: 'postgresql:13'
-              namespace: 'openshift'
-            lastTriggeredImage: ''
-          type: ImageChange
-        - type: ConfigChange
-  
+              emptyDir: {}
+
   - apiVersion: apps.openshift.io/v1
     kind: DeploymentConfig
     metadata:
@@ -190,33 +116,50 @@ objects:
     spec:
       replicas: 1
       selector:
-        name: "${APP_NAME}-appserver"
-     
+        app: "${APP_NAME}-appserver"
       template:
         metadata:
           labels:
             app: "${APP_NAME}-appserver"
-            name: "${APP_NAME}-appserver"
         spec:
           containers:
-            - image: 'dipache/pdos'
-              imagePullPolicy: Always
-              name: appserver
-             
+            - name: appserver
+              image: 'drupal:latest'
               env:
-                - name: DB_URL
+                - name: POSTGRES_HOST
+                  value: ${APP_NAME}-pgsql
+                - name: POSTGRES_USER
                   valueFrom:
                     secretKeyRef:
                       name: "${APP_NAME}-keys"
-                      key: DB_URL
-           
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${APP_NAME}-keys"
+                      key: POSTGRES_PASSWORD
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${APP_NAME}-keys"
+                      key: POSTGRES_DB
               ports:
-                - containerPort: 8000
-                  protocol: TCP
-              resources:
-                limits:
-                  memory: "256M"
-                requests:
-                  memory: "256M"
-          restartPolicy: Always
-      test: false
+                - containerPort: 8080
+              volumeMounts:
+                - mountPath: /var/www/html/modules
+                  name: drupal-modules
+                - mountPath: /var/www/html/profiles
+                  name: drupal-profiles
+                - mountPath: /var/www/html/themes
+                  name: drupal-themes
+                - mountPath: /var/www/html/sites
+                  name: drupal-sites
+          volumes:
+            - name: drupal-modules
+              emptyDir: {}
+            - name: drupal-profiles
+              emptyDir: {}
+            - name: drupal-themes
+              emptyDir: {}
+            - name: drupal-sites
+              emptyDir: {}
