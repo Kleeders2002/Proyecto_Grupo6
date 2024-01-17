@@ -83,7 +83,7 @@ objects:
         spec:
           containers:
             - name: postgresql
-              image: 'postgres:9.26'
+              image: 'postgres:9.6.24'
               env:
                 - name: POSTGRES_USER
                   valueFrom:
